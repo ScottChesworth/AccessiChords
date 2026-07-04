@@ -25,7 +25,7 @@
     Accessible chord injection scripts for REAPER
     <br />
     <a href="https://github.com/Timtam/AccessiChords/issues">Report Bug</a>
-    ·
+    ï¿½
     <a href="https://github.com/Timtam/AccessiChords/issues">Request Feature</a>
   </p>
 </p>
@@ -117,6 +117,17 @@ note: all speech announcements will only work if you've got an OSARA version ins
 ### Cycling through available chords
 
 After you've selected a note using the pitch cursor (ALT + UP or DOWN arrow within the OSARA keymap), you can use the actions "timtam_AccessiChords select next chord for pitch cursor.lua" and "timtam_AccessiChords select previous chord for pitch cursor.lua" to cycle through all chords available for that note. When doing so, the chord will be played on the note channel selected for the virtual MIDI keyboard with the default velocity of the same. The name of the chord will also be announced by your screen reader. The scripts will also announce if the selected chord is not available for the given note.
+
+The chords are presented in the following order, grouped by family. Some of the taller chords (for example the ninths, elevenths and thirteenths) will not be available near the very top of the MIDI range, since their upper notes would fall outside it; in that case the script announces that the chord does not exist.
+
+* Triads: major, minor, diminished, augmented, suspended second, suspended fourth
+* Two-note chords: power, flat fifth
+* Added-note chords: added ninth, minor added ninth
+* Sixths: major sixth, minor sixth
+* Sevenths: dominant seventh, major seventh, minor seventh, minor major seventh, half diminished seventh, diminished seventh, augmented seventh, major seventh sharp fifth, dominant seventh flat fifth, dominant seventh flat ninth, dominant seventh sharp ninth
+* Ninths: dominant ninth, major ninth, minor ninth
+* Elevenths: minor eleventh, dominant eleventh
+* Thirteenths: dominant thirteenth, major thirteenth
 
 ### Cycling through available chord inversions
 

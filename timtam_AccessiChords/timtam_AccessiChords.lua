@@ -176,11 +176,22 @@ local function getAllChords()
       end
     },
     {
-      name = 'power',
+      name = 'diminished',
       create = function(note)
         return {
           note,
-          note + 7
+          note + 3,
+          note + 6
+        }
+      end
+    },
+    {
+      name = 'augmented',
+      create = function(note)
+        return {
+          note,
+          note + 4,
+          note + 8
         }
       end
     },
@@ -205,22 +216,42 @@ local function getAllChords()
       end
     },
     {
-      name = 'diminished',
+      name = 'power',
       create = function(note)
         return {
           note,
-          note + 3,
+          note + 7
+        }
+      end
+    },
+    {
+      name = 'flat fifth',
+      create = function(note)
+        return {
+          note,
           note + 6
         }
       end
     },
     {
-      name = 'augmented',
+      name = 'added ninth',
       create = function(note)
         return {
           note,
+          note + 2,
           note + 4,
-          note + 8
+          note + 7
+        }
+      end
+    },
+    {
+      name = 'minor added ninth',
+      create = function(note)
+        return {
+          note,
+          note + 2,
+          note + 3,
+          note + 7
         }
       end
     },
@@ -280,11 +311,179 @@ local function getAllChords()
       end
     },
     {
-      name = 'flat fifth',
+      name = 'minor major seventh',
       create = function(note)
         return {
           note,
-          note + 6
+          note + 3,
+          note + 7,
+          note + 11
+        }
+      end
+    },
+    {
+      name = 'half diminished seventh',
+      create = function(note)
+        return {
+          note,
+          note + 3,
+          note + 6,
+          note + 10
+        }
+      end
+    },
+    {
+      name = 'diminished seventh',
+      create = function(note)
+        return {
+          note,
+          note + 3,
+          note + 6,
+          note + 9
+        }
+      end
+    },
+    {
+      name = 'augmented seventh',
+      create = function(note)
+        return {
+          note,
+          note + 4,
+          note + 8,
+          note + 10
+        }
+      end
+    },
+    {
+      name = 'major seventh sharp fifth',
+      create = function(note)
+        return {
+          note,
+          note + 4,
+          note + 8,
+          note + 11
+        }
+      end
+    },
+    {
+      name = 'dominant seventh flat fifth',
+      create = function(note)
+        return {
+          note,
+          note + 4,
+          note + 6,
+          note + 10
+        }
+      end
+    },
+    {
+      name = 'dominant seventh flat ninth',
+      create = function(note)
+        return {
+          note,
+          note + 1,
+          note + 4,
+          note + 7,
+          note + 10
+        }
+      end
+    },
+    {
+      name = 'dominant seventh sharp ninth',
+      create = function(note)
+        return {
+          note,
+          note + 3,
+          note + 4,
+          note + 7,
+          note + 10
+        }
+      end
+    },
+    {
+      name = 'dominant ninth',
+      create = function(note)
+        return {
+          note,
+          note + 2,
+          note + 4,
+          note + 7,
+          note + 10
+        }
+      end
+    },
+    {
+      name = 'major ninth',
+      create = function(note)
+        return {
+          note,
+          note + 2,
+          note + 4,
+          note + 7,
+          note + 11
+        }
+      end
+    },
+    {
+      name = 'minor ninth',
+      create = function(note)
+        return {
+          note,
+          note + 2,
+          note + 3,
+          note + 7,
+          note + 10
+        }
+      end
+    },
+    {
+      name = 'minor eleventh',
+      create = function(note)
+        return {
+          note,
+          note + 2,
+          note + 3,
+          note + 5,
+          note + 7,
+          note + 10
+        }
+      end
+    },
+    {
+      name = 'dominant eleventh',
+      create = function(note)
+        return {
+          note,
+          note + 2,
+          note + 5,
+          note + 7,
+          note + 10
+        }
+      end
+    },
+    {
+      name = 'dominant thirteenth',
+      create = function(note)
+        return {
+          note,
+          note + 2,
+          note + 4,
+          note + 7,
+          note + 9,
+          note + 10
+        }
+      end
+    },
+    {
+      name = 'major thirteenth',
+      create = function(note)
+        return {
+          note,
+          note + 2,
+          note + 4,
+          note + 7,
+          note + 9,
+          note + 11
         }
       end
     }
