@@ -668,7 +668,7 @@ end
 local function getInversionName(inversion)
 
   if inversion == 0 then
-    return "root"
+    return "root position"
   elseif inversion == 1 then
     return "first inversion"
   elseif inversion == 2 then
@@ -678,6 +678,19 @@ local function getInversionName(inversion)
   end
 
   return "inversion "..tostring(inversion)
+end
+
+-- spoken name for a chord mode. block is the plain simultaneous chord, the other
+-- two are the ascending and descending arpeggios.
+local function getModeName(mode)
+
+  if mode == 1 then
+    return "low to high"
+  elseif mode == 2 then
+    return "high to low"
+  end
+
+  return "block"
 end
 
 local function getChordNamesForNote(note, inversion, mode)
@@ -692,12 +705,16 @@ local function getChordNamesForNote(note, inversion, mode)
 
   for _, gen in pairs(chordGenerators) do
 
-    name = getNoteName(note).." "..gen.name.." "..getInversionName(inversion)
+    name = getNoteName(note).." "..gen.name
 
-    if mode == 1 then
-      name = name .. " (low to high)"
-    elseif mode == 2 then
-      name = name .. " (high to low)"
+    -- root position is the common case, so it is left unspoken in the full chord
+    -- name; only actual inversions are appended
+    if inversion > 0 then
+      name = name.." "..getInversionName(inversion)
+    end
+
+    if mode > 0 then
+      name = name .. " (" .. getModeName(mode) .. ")"
     end
 
     table.insert(names, name)
@@ -1022,7 +1039,9 @@ end
 return {
   deserializeTable = deserializeTable,
   getChordInversion = getChordInversion,
+  getInversionName = getInversionName,
   getMaxInversion = getMaxInversion,
+  getModeName = getModeName,
   getChordNamesForNote = getChordNamesForNote,
   getChordsForNote = getChordsForNote,
   getCurrentPitchCursorNote = getCurrentPitchCursorNote,

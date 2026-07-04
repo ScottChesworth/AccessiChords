@@ -31,4 +31,4 @@ end
 
 AccessiChords.playNotesByChordMode(10, chordMode, table.unpack(chords[chordIndex]))
 
-AccessiChords.speak(chordNames[chordIndex])
+AccessiChords.speak(AccessiChords.getModeName(chordMode))
