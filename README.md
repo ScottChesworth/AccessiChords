@@ -91,6 +91,8 @@ note: make sure to copy the folder directly into your Scripts folder, not in som
 Open an empty project within REAPER and open the actions list (shortcut: F4). Make sure to filter for MIDI Editor so that the actions will not be accessible from outside that one.
 Now select New Action and Load ReaScript. Make sure to load every timtam_AccessiChords file from within the timtam_AccessiChords folder, except the one that is called timtam_AccessiChords.lua. That one only contains dependencies and doesn't contain any action. Also do not load the smallfolk.lua file, that one is not required as an action.
 
+After loading the actions, run "timtam_AccessiChords process notes deferred.lua" once from the actions list. When loaded manually like this (rather than installed via ReaPack) it is assigned a different command id, so it records that id for itself on this first run. Without this step, chord playback would report that the action to process notes deferred could not be found. ReaPack installs do this automatically and don't require the manual run.
+
 ### Assigning shortcuts
 
 After installing the scripts in either of the ways above, you will have the actions provided by AccessiChords available in your actions list to be used.

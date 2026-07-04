@@ -65,6 +65,50 @@ local function getValue(key, defaultValue)
   return value
 end
 
+-- Resolve the command id of the "process notes deferred" action.
+-- We first try an id the action recorded about itself (see registerDeferredCommand),
+-- which makes local/manually loaded installs work without hardcoding a machine
+-- specific id, then fall back to the known ReaPack ids shipped above.
+local function resolveDeferredCommandID()
+
+  local candidates = {}
+
+  local registered = getValue('deferred_notes_command_name', '')
+
+  if registered ~= '' then
+    table.insert(candidates, registered)
+  end
+
+  for i = 1, #deferredNotesCommandIDs do
+    table.insert(candidates, deferredNotesCommandIDs[i])
+  end
+
+  for i = 1, #candidates do
+
+    local commandID = reaper.NamedCommandLookup(candidates[i])
+
+    if commandID ~= 0 then
+      return commandID
+    end
+
+  end
+
+  return 0
+end
+
+-- Called by the "process notes deferred" action so it can record its own command
+-- id. Stored persistently (survives REAPER restarts) so resolveDeferredCommandID
+-- can find it on any install without a hardcoded id.
+local function registerDeferredCommand()
+
+  local cmdID = ({reaper.get_action_context()})[4]
+  local named = reaper.ReverseNamedCommandLookup(cmdID)
+
+  if named ~= nil then
+    reaper.SetExtState(sectionName, 'deferred_notes_command_name', '_' .. named, true)
+  end
+end
+
 local function print(message)
 
   if type(message) == "table" then
@@ -770,22 +814,9 @@ local function stopNotesDeferred(duration, ...)
   if deferCount == 0 then
 
     -- we have to manually launch the action
-    local commandID
-    
-    for i = 1, #deferredNotesCommandIDs do
+    local commandID = resolveDeferredCommandID()
 
-      found = false
-
-      commandID = reaper.NamedCommandLookup(deferredNotesCommandIDs[i])
-
-      if commandID ~= 0 then
-        found = true
-        break
-      end
-      
-    end
-
-    if found == true then
+    if commandID ~= 0 then
 
       -- to prevent many calls before even the first defer in the action fires, we'll have to set defer count to 1 already
       setValue('deferred_notes_defer_count', 1)
@@ -847,22 +878,9 @@ local function playNotesDeferred(delay, duration, ...)
   if deferCount == 0 then
 
     -- we have to manually launch the action
-    local commandID
-    
-    for i = 1, #deferredNotesCommandIDs do
+    local commandID = resolveDeferredCommandID()
 
-      found = false
-
-      commandID = reaper.NamedCommandLookup(deferredNotesCommandIDs[i])
-
-      if commandID ~= 0 then
-        found = true
-        break
-      end
-      
-    end
-
-    if found == true then
+    if commandID ~= 0 then
 
       -- to prevent many calls before even the first defer in the action fires, we'll have to set defer count to 1 already
       setValue('deferred_notes_defer_count', 1)
@@ -957,6 +975,7 @@ return {
   playNotesByChordMode = playNotesByChordMode,
   playNotesDeferred = playNotesDeferred,
   print = print,
+  registerDeferredCommand = registerDeferredCommand,
   serializeTable = serializeTable,
   setValue = setValue,
   setValuePersist = setValuePersist,

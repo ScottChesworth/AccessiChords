@@ -4,6 +4,10 @@ package.path = path .. "?.lua"
 
 local AccessiChords = require('timtam_AccessiChords')
 
+-- record this action's own command id so the library can launch it on any
+-- install without relying on a hardcoded ReaPack id
+AccessiChords.registerDeferredCommand()
+
 local function run()
 
   local noteTable = AccessiChords.deserializeTable(AccessiChords.getValue('deferred_notes', AccessiChords.serializeTable({})))
