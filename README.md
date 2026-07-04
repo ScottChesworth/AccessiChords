@@ -89,7 +89,7 @@ note: make sure to copy the folder directly into your Scripts folder, not in som
 ##### Adding actions
 
 Open an empty project within REAPER and open the actions list (shortcut: F4). Make sure to filter for MIDI Editor so that the actions will not be accessible from outside that one.
-Now select New Action and Load ReaScript. Make sure to load every timtam_AccessiChords file from within the timtam_AccessiChords folder, except the one that is called timtam_AccessiChords.lua. That one only contains dependencies and doesn't contain any action. Also do not load the smallfolk.lua file, that one is not required as an action.
+Now select New Action and Load ReaScript. Make sure to load every timtam_AccessiChords file from within the timtam_AccessiChords folder, except the one that is called timtam_AccessiChords.lua. That one only contains dependencies and doesn't contain any action. Also do not load the smallfolk.lua, chordlib.lua, speech.lua or chordreport.lua files, those are dependency modules and not actions.
 
 After loading the actions, run "timtam_AccessiChords process notes deferred.lua" once from the actions list. When loaded manually like this (rather than installed via ReaPack) it is assigned a different command id, so it records that id for itself on this first run. Without this step, chord playback would report that the action to process notes deferred could not be found. ReaPack installs do this automatically and don't require the manual run.
 
@@ -107,6 +107,8 @@ Therefore, open the actions list again and search for AccessiChords in the filte
 * timtam_AccessiChords select previous chord inversion.lua: CTRL + ALT + LEFT
 * timtam_AccessiChords select next chord mode.lua: CTRL + ALT + SHIFT + Up
 * timtam_AccessiChords select previous chord mode.lua: CTRL + ALT + SHIFT + Down
+* timtam_AccessiChords move to next chord.lua: CTRL + SHIFT + Right (or replace OSARA's own "move to next chord" binding on the Right arrow)
+* timtam_AccessiChords move to previous chord.lua: CTRL + SHIFT + Left (or replace OSARA's own "move to previous chord" binding on the Left arrow)
 
 Note: when using MacOS, control is command and alt is option. Shift remains the same.
 
@@ -151,6 +153,14 @@ The selected mode is announced with speech and remembered, so it applies to ever
 
 When having a chord selected, you can use the action "timtam_AccessiChords insert selected chord for pitch cursor.lua" to insert this chord at the current position into the MIDI editor. The notes will have the length of the current grid size or, if the length of the next inserted note is set using the appropriate reaper-native actions, they will have the appropriate length as well. The chord will be played again and the edit cursor will automatically be moved along the track by the size of the inserted notes.
 Note though that in contradiction to reaper-native note insertion, there currently is no speech when the cursor is moved that way. This will be considered a feature later to be implemented though.
+
+### Moving through and reporting existing chords
+
+Once you have chords in your MIDI editor, you can move through them with the actions "timtam_AccessiChords move to next chord.lua" and "timtam_AccessiChords move to previous chord.lua". These build on OSARA's own robust chord navigation, but silence OSARA's report and describe the chord in AccessiChords' own words instead. Each chord is identified and announced by name, for example "E flat major", "D dominant seventh, first inversion" or "C half diminished seventh", including inversions and any added tensions.
+
+Note spelling (whether an accidental is spoken as a flat or a sharp) follows the key you have set with REAPER's native snap to key in the MIDI editor. For example, in G major an F sharp is spoken as "F sharp", while in E flat major a B flat is spoken as "B flat". When no key is set, flats are used by default.
+
+To set the key in an accessible way you need REAPER 7.75 or newer. The snap to key control lives in the Options menu at the top of the MIDI editor. AccessiChords reads this native setting directly, so there is no separate key to configure and it is saved with your project.
 
 <!-- ROADMAP -->
 ## Roadmap
