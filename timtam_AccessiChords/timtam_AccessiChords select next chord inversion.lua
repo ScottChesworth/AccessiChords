@@ -11,8 +11,10 @@ local chordMode = tonumber(AccessiChords.getValue('last_chord_mode', 0))
 
 chordInversion = chordInversion + 1
 
-if chordInversion > 3 then
-  chordInversion = 3
+local maxInversion = AccessiChords.getMaxInversion(note, chordIndex)
+
+if chordInversion > maxInversion then
+  chordInversion = maxInversion
 end
 
 AccessiChords.setValue('last_chord_inversion', chordInversion)

@@ -568,6 +568,21 @@ local function getChordInversion(step, ...)
   return notes
 end
 
+-- highest inversion available for the chord at the given position in the chord
+-- list. A chord of n notes has n - 1 inversions (each inversion raises one more
+-- of the lowest notes by an octave), so this scales with the size of the chord
+-- rather than being a fixed maximum.
+local function getMaxInversion(note, chordIndex)
+
+  local chordGenerators = getAllChords()
+
+  if chordGenerators[chordIndex] == nil then
+    return 0
+  end
+
+  return #(chordGenerators[chordIndex].create(note)) - 1
+end
+
 local function getChordsForNote(note, inversion)
 
   inversion = inversion or 0
@@ -646,25 +661,38 @@ local function getNoteName(note)
   return getAllNoteNames()[noteIndex].." "..tostring(octave)
 end
 
+-- spoken name for an inversion. root position and the first three inversions
+-- use their conventional ordinal names; higher inversions (only reachable on the
+-- extended five and six note chords) fall back to "inversion n" since ordinal
+-- names above third are not commonly used.
+local function getInversionName(inversion)
+
+  if inversion == 0 then
+    return "root"
+  elseif inversion == 1 then
+    return "first inversion"
+  elseif inversion == 2 then
+    return "second inversion"
+  elseif inversion == 3 then
+    return "third inversion"
+  end
+
+  return "inversion "..tostring(inversion)
+end
+
 local function getChordNamesForNote(note, inversion, mode)
 
   inversion = inversion or 0
   mode = mode or 0
 
   local chordGenerators = getAllChords()
-  
+
   local names = {}
   local name
 
   for _, gen in pairs(chordGenerators) do
 
-    name = getNoteName(note).." "..gen.name
-
-    if inversion > 0 then
-
-      name = name.. " inversion "..tostring(inversion)
-
-    end
+    name = getNoteName(note).." "..gen.name.." "..getInversionName(inversion)
 
     if mode == 1 then
       name = name .. " (low to high)"
@@ -994,6 +1022,7 @@ end
 return {
   deserializeTable = deserializeTable,
   getChordInversion = getChordInversion,
+  getMaxInversion = getMaxInversion,
   getChordNamesForNote = getChordNamesForNote,
   getChordsForNote = getChordsForNote,
   getCurrentPitchCursorNote = getCurrentPitchCursorNote,
