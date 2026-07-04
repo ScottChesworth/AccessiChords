@@ -667,9 +667,9 @@ local function getChordNamesForNote(note, inversion, mode)
     end
 
     if mode == 1 then
-      name = name .. " (broken from lowest to highest)"
+      name = name .. " (low to high)"
     elseif mode == 2 then
-      name = name .. " (broken from highest to lowest)"
+      name = name .. " (high to low)"
     end
 
     table.insert(names, name)

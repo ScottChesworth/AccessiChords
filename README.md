@@ -105,6 +105,8 @@ Therefore, open the actions list again and search for AccessiChords in the filte
 * timtam_AccessiChords select previous chord for pitch cursor.lua: CTRL + ALT + DOWN
 * timtam_AccessiChords select next chord inversion.lua: CTRL + ALT + RIGHT
 * timtam_AccessiChords select previous chord inversion.lua: CTRL + ALT + LEFT
+* timtam_AccessiChords select next chord mode.lua: CTRL + ALT + SHIFT + Up
+* timtam_AccessiChords select previous chord mode.lua: CTRL + ALT + SHIFT + Down
 
 Note: when using MacOS, control is command and alt is option. Shift remains the same.
 
@@ -134,6 +136,16 @@ The chords are presented in the following order, grouped by family. Some of the 
 ### Cycling through available chord inversions
 
 After selecting a note with the pitch cursor and a chord using the above actions, you can use the actions "timtam_AccessiChords select next chord inversion.lua" and "timtam_AccessiChords select previous chord inversion.lua" to cycle through the available chord inversions. Those will be announced with speech and remember as well, so that you can use the above actions to change chords while the inversion will be maintained and can be inserted as usual (see below).
+
+### Cycling through chord modes
+
+You can use the actions "timtam_AccessiChords select next chord mode.lua" and "timtam_AccessiChords select previous chord mode.lua" to cycle through the available chord modes. The mode controls whether the notes of a chord are played and inserted all together or one after another. Three modes are available:
+
+* block: all notes of the chord sound at the same time (the default).
+* low to high: the notes are played in sequence starting with the lowest, so the chord is arpeggiated upwards.
+* high to low: the notes are played in sequence starting with the highest, so the chord is arpeggiated downwards.
+
+The selected mode is announced with speech and remembered, so it applies to every chord you preview and insert until you change it again. For the low to high and high to low modes, the spacing between the notes is derived from the length of the note that would be inserted (the next note length if set, otherwise the current grid size). When inserting, the notes are written into the MIDI editor staggered accordingly, giving you an actual arpeggio in the item.
 
 ### Inserting a selected chord
 
