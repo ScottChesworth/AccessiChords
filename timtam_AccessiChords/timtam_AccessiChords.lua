@@ -896,12 +896,44 @@ local function playNotesDeferred(delay, duration, ...)
   end
 end
 
+-- immediately stops any preview notes that are still sounding or scheduled, so
+-- that rapidly triggered previews (e.g. quickly browsing chords or inversions)
+-- interrupt each other instead of stacking up into noise.
+-- deferred_notes_defer_count is intentionally left untouched so an already
+-- running deferred loop keeps servicing the next preview rather than a second
+-- loop being launched.
+local function stopPendingPreview()
+
+  local noteTable = deserializeTable(getValue('deferred_notes', serializeTable({})))
+
+  if #noteTable == 0 then
+    return
+  end
+
+  local notes = {}
+  local seen = {}
+  local i
+
+  for i = 1, #noteTable do
+    if seen[noteTable[i]['note']] == nil then
+      seen[noteTable[i]['note']] = true
+      table.insert(notes, noteTable[i]['note'])
+    end
+  end
+
+  stopNotes(table.unpack(notes))
+
+  setValue('deferred_notes', serializeTable({}))
+end
+
 -- plays notes according to chord mode (either full, broken or broken from last to first)
 -- broken chords will take the current note length into consideration
 -- duration in defer ticks (ca 33 msec)
 local function playNotesByChordMode(duration, mode, ...)
 
   local notes = {...}
+
+  stopPendingPreview()
   
   local lstart, lend, lstep, i
   local offset = 0
