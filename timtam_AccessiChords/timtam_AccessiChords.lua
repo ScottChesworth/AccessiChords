@@ -565,6 +565,12 @@ local function getChordInversion(step, ...)
     notes[i] = notes[i] + 12
   end
 
+  -- Raising the lowest notes leaves the array out of pitch order, so sort it
+  -- ascending. Block mode plays all notes together and doesn't care, but the
+  -- broken (arpeggiated) modes step through the array in order and need it
+  -- low to high to sound the inversion correctly.
+  table.sort(notes)
+
   return notes
 end
 
