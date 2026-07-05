@@ -626,8 +626,11 @@ local function getChordsForNote(note, inversion)
 
 end
 
+-- outputs text through OSARA's speech. Stays silent when text is nil or "" so an
+-- empty result (e.g. a describe() that has no words for the analysis) announces
+-- nothing rather than a blank message.
 local function speak(text)
-  if reaper.osara_outputMessage ~= nil then
+  if text ~= nil and text ~= "" and reaper.osara_outputMessage ~= nil then
     reaper.osara_outputMessage(text)
   end
 end
@@ -971,6 +974,19 @@ local function stopPendingPreview()
   setValue('deferred_notes', serializeTable({}))
 end
 
+-- iteration direction over a chord's notes for a broken-chord mode: mode 1
+-- (low to high) walks forwards, mode 2 (high to low) backwards. returns start,
+-- stop, step for a numeric for-loop over the note list (indices 1..count), or
+-- nothing for other modes, matching the previous inline behaviour where the loop
+-- bounds were left unset.
+local function chordModeRange(mode, count)
+  if mode == 1 then
+    return 1, count, 1
+  elseif mode == 2 then
+    return count, 1, -1
+  end
+end
+
 -- plays notes according to chord mode (either full, broken or broken from last to first)
 -- broken chords will take the current note length into consideration
 -- duration in defer ticks (ca 33 msec)
@@ -991,15 +1007,7 @@ local function playNotesByChordMode(duration, mode, ...)
     return
   end
 
-  if mode == 1 then 
-    lstart = 1
-    lend = #notes
-    lstep = 1
-  elseif mode == 2 then
-    lstart = #notes
-    lend = 1
-    lstep = -1
-  end
+  lstart, lend, lstep = chordModeRange(mode, #notes)
 
   for i = lstart, lend, lstep do
 
@@ -1021,19 +1029,468 @@ local function insertMidiNotesByChordMode(mode, ...)
 
   local lstart, lend, lstep, i
   
-  if mode == 1 then
-    lstart = 1
-    lend = #notes
-    lstep = 1
-  elseif mode == 2 then
-    lstart = #notes
-    lend = 1
-    lstep = -1
-  end
+  lstart, lend, lstep = chordModeRange(mode, #notes)
   
   for i = lstart, lend, lstep do
     insertMidiNotes(notes[i])
   end
+end
+
+-- ==========================================================================
+-- chord identification engine (merged from chordlib.lua)
+-- ==========================================================================
+
+--[[
+  Chord identification engine (pure Lua, no REAPER dependency).
+
+  Input  : a list of MIDI note numbers (integers, duplicates / octaves allowed).
+  Output : a structured result table describing what was found. Naming/spelling is
+           NOT done here -- that lives in the speech section below so the same analysis can be
+           rendered in different ways.
+
+  Approach (see project notes):
+    * Reduce sounding notes to a pitch-class set (0-11), but remember the bass
+      (lowest MIDI note) and the full sorted pitch list for voicing.
+    * Try every present pitch class as a candidate root. For each root, transpose
+      so root = 0 and test it against a table of chord-quality templates.
+    * A template matches if all its tones are present (the perfect 5th may be
+      omitted, which is extremely common). Remaining notes become "extras"
+      (tensions). Candidates are scored, biased toward the bass being the root,
+      toward fuller/cleaner matches, and toward more common qualities.
+    * Inversion is derived from the bass relative to the chosen root.
+
+  Known v1 limitations (documented, not bugs):
+    * Rootless voicings (root pitch absent) are not detected -- only present
+      pitch classes are tried as roots.
+    * Enharmonic spelling is decided in the speech section from the key/scale context.
+]]
+
+local chordlib = {}
+
+-- Chord-quality templates. `iv` = intervals in semitones from the root.
+-- `common` is a popularity weight used only as a tie-breaker (0-100).
+-- Order does not matter; scoring decides the winner.
+chordlib.templates = {
+  -- triads
+  { key = "major",      iv = {0,4,7},          common = 100 },
+  { key = "minor",      iv = {0,3,7},          common = 100 },
+  { key = "diminished", iv = {0,3,6},          common = 70  },
+  { key = "augmented",  iv = {0,4,8},          common = 50  },
+  { key = "sus4",       iv = {0,5,7},          common = 60  },
+  { key = "sus2",       iv = {0,2,7},          common = 55  },
+  -- sixths
+  { key = "6",          iv = {0,4,7,9},        common = 70  },
+  { key = "min6",       iv = {0,3,7,9},        common = 55  },
+  -- sevenths
+  { key = "dom7",       iv = {0,4,7,10},       common = 95  },
+  { key = "maj7",       iv = {0,4,7,11},       common = 95  },
+  { key = "min7",       iv = {0,3,7,10},       common = 95  },
+  { key = "m7b5",       iv = {0,3,6,10},       common = 75  },
+  { key = "dim7",       iv = {0,3,6,9},        common = 70  },
+  { key = "minMaj7",    iv = {0,3,7,11},       common = 40  },
+  { key = "aug7",       iv = {0,4,8,10},       common = 35  }, -- 7 #5
+  { key = "maj7s5",     iv = {0,4,8,11},       common = 25  },
+  { key = "7b5",        iv = {0,4,6,10},       common = 35  },
+  -- added-note (no 7th)
+  { key = "add9",       iv = {0,4,7,2},        common = 50  },
+  { key = "madd9",      iv = {0,3,7,2},        common = 45  },
+  -- ninths
+  { key = "dom9",       iv = {0,4,7,10,2},     common = 70  },
+  { key = "maj9",       iv = {0,4,7,11,2},     common = 65  },
+  { key = "min9",       iv = {0,3,7,10,2},     common = 65  },
+  { key = "7b9",        iv = {0,4,7,10,1},     common = 45  },
+  { key = "7s9",        iv = {0,4,7,10,3},     common = 45  },
+  -- elevenths / thirteenths (often omit tones; subset matching handles that)
+  { key = "min11",      iv = {0,3,7,10,2,5},   common = 40  },
+  { key = "dom11",      iv = {0,7,10,2,5},     common = 30  },
+  { key = "dom13",      iv = {0,4,7,10,2,9},   common = 35  },
+  { key = "maj13",      iv = {0,4,7,11,2,9},   common = 25  },
+}
+
+local PERFECT_FIFTH = 7
+
+-- Map a bass interval (semitones above the root) to an inversion ordinal.
+-- 0 = root position; 1/2/3 = first/second/third; "over" = bass is a non-standard
+-- chord tone (rendered as a slash / "over <note>").
+local function inversionFromBass(bassInterval)
+  if bassInterval == 0 then return 0 end
+  if bassInterval == 3 or bassInterval == 4 then return 1 end
+  if bassInterval == 6 or bassInterval == 7 or bassInterval == 8 then return 2 end
+  if bassInterval == 9 or bassInterval == 10 or bassInterval == 11 then return 3 end
+  return "over"
+end
+
+-- Build a set {pitchclass=true} and return it plus a sorted list of classes.
+local function pitchClassSet(pitches)
+  local set, list = {}, {}
+  for _, p in ipairs(pitches) do
+    local pc = p % 12
+    if not set[pc] then set[pc] = true; list[#list+1] = pc end
+  end
+  table.sort(list)
+  return set, list
+end
+
+-- Score one (root, template) candidate against the present pitch classes.
+-- Returns a score and an `extras` list, or nil if the template cannot match.
+local function scoreCandidate(rel, relCount, root, bassPc, t)
+  local tmpl = {}
+  for _, iv in ipairs(t.iv) do tmpl[iv] = true end
+
+  -- Every template tone must be present, except the perfect 5th may be omitted.
+  local missPenalty = 0
+  for _, iv in ipairs(t.iv) do
+    if not rel[iv] then
+      if iv == PERFECT_FIFTH then
+        missPenalty = missPenalty + 1
+      else
+        return nil
+      end
+    end
+  end
+
+  -- Present tones the template does not account for become tensions.
+  local extras = {}
+  for iv in pairs(rel) do
+    if not tmpl[iv] then extras[#extras+1] = iv end
+  end
+  table.sort(extras)
+
+  local spec = #t.iv
+  local score = spec * 10 - #extras * 4 - missPenalty * 3 + t.common * 0.1
+  if root == bassPc then score = score + 5 end
+
+  return score, extras
+end
+
+-- Analyse a chord (3+ pitch classes).
+local function analyseChord(pcs, bassPc, pitches)
+  local best
+  for _, root in ipairs(pcs) do
+    -- pitch classes relative to this candidate root
+    local rel = {}
+    for _, pc in ipairs(pcs) do rel[(pc - root) % 12] = true end
+
+    for _, t in ipairs(chordlib.templates) do
+      local score, extras = scoreCandidate(rel, #pcs, root, bassPc, t)
+      if score and (not best or score > best.score) then
+        best = { score = score, root = root, template = t, extras = extras }
+      end
+    end
+  end
+
+  if not best then
+    return { kind = "unknown", notes = pitches, bassPc = bassPc, guessRootPc = bassPc }
+  end
+
+  local bassInterval = (bassPc - best.root) % 12
+  return {
+    kind      = "chord",
+    rootPc    = best.root,
+    quality   = best.template.key,
+    bassPc    = bassPc,
+    inversion = inversionFromBass(bassInterval),
+    extras    = best.extras,          -- list of semitone intervals from root
+    notes     = pitches,              -- sorted unique pitches, for voicing
+  }
+end
+
+-- Public entry point. `pitches` is a list of MIDI note numbers.
+function chordlib.analyze(pitches)
+  -- collect, sort, de-duplicate exact pitches (keep octave info for voicing)
+  local seen, uniq = {}, {}
+  for _, p in ipairs(pitches or {}) do
+    if type(p) == "number" and not seen[p] then seen[p] = true; uniq[#uniq+1] = p end
+  end
+  table.sort(uniq)
+
+  if #uniq == 0 then return { kind = "empty" } end
+
+  local bass = uniq[1]
+  local set, pcs = pitchClassSet(uniq)
+
+  if #pcs == 1 then
+    return { kind = "note", pitch = bass, pc = bass % 12, notes = uniq }
+  end
+
+  if #pcs == 2 then
+    -- Name the interval from the bass pitch class to the other pitch class, so
+    -- octave doublings (e.g. C4 G4 C5) don't get mis-measured between extremes.
+    local bassPc = bass % 12
+    local otherPc = (pcs[1] == bassPc) and pcs[2] or pcs[1]
+    local semis = (otherPc - bassPc) % 12   -- 1..11; unison/octave are 1 pc
+    return {
+      kind    = "interval",
+      semis   = semis,
+      bassPc  = bassPc,
+      otherPc = otherPc,
+      bass    = bass,
+      notes   = uniq,
+    }
+  end
+
+  return analyseChord(pcs, bass % 12, uniq)
+end
+
+-- ==========================================================================
+-- chord speech rendering (merged from speech.lua)
+-- ==========================================================================
+
+--[[
+  Turns a chordlib result into a spoken, full-words string.
+
+  Everything a user hears is assembled here, so this is the section to edit to
+  reword anything. It has no REAPER dependency; the caller passes in the current
+  key/scale context (spelling) and hands the result to reaper.osara_outputMessage.
+
+  Adapted for AccessiChords: the quality names match the spoken chord names used
+  by the chord insertion actions (e.g. "dominant seventh", "half diminished
+  seventh") so the toolset speaks with one voice.
+]]
+
+local speech = {}
+
+-- Note spellings. Sharps vs flats is chosen from the key/scale context; the
+-- chord root then drives which set we use, so e.g. a D7 spells "F sharp".
+local SHARP_NAMES = {
+  [0]="C", [1]="C sharp", [2]="D", [3]="D sharp", [4]="E", [5]="F",
+  [6]="F sharp", [7]="G", [8]="G sharp", [9]="A", [10]="A sharp", [11]="B",
+}
+local FLAT_NAMES = {
+  [0]="C", [1]="D flat", [2]="D", [3]="E flat", [4]="E", [5]="F",
+  [6]="G flat", [7]="G", [8]="A flat", [9]="A", [10]="B flat", [11]="B",
+}
+
+-- Quality keys (from chordlib) -> spoken words. These mirror the chord names
+-- used by the AccessiChords insertion actions.
+speech.quality = {
+  major="major", minor="minor", diminished="diminished", augmented="augmented",
+  sus4="suspended fourth", sus2="suspended second",
+  ["6"]="major sixth", min6="minor sixth",
+  dom7="dominant seventh", maj7="major seventh", min7="minor seventh",
+  m7b5="half diminished seventh", dim7="diminished seventh",
+  minMaj7="minor major seventh", aug7="augmented seventh",
+  maj7s5="major seventh sharp fifth", ["7b5"]="dominant seventh flat fifth",
+  add9="added ninth", madd9="minor added ninth",
+  dom9="dominant ninth", maj9="major ninth", min9="minor ninth",
+  ["7b9"]="dominant seventh flat ninth", ["7s9"]="dominant seventh sharp ninth",
+  min11="minor eleventh", dom11="dominant eleventh",
+  dom13="dominant thirteenth", maj13="major thirteenth",
+}
+
+-- Inversion ordinal -> words. Root position (0) is intentionally silent.
+speech.inversion = { [1]="first inversion", [2]="second inversion", [3]="third inversion" }
+
+-- Interval semitone -> spoken interval name (full words).
+speech.interval = {
+  [0]="unison", [1]="minor second", [2]="major second", [3]="minor third",
+  [4]="major third", [5]="perfect fourth", [6]="tritone", [7]="perfect fifth",
+  [8]="minor sixth", [9]="major sixth", [10]="minor seventh", [11]="major seventh",
+  [12]="octave",
+}
+
+-- Tension semitone-from-root -> spoken degree, for leftover "extra" notes.
+speech.tension = {
+  [1]="flat nine", [2]="nine", [3]="sharp nine", [5]="eleven", [6]="sharp eleven",
+  [8]="flat thirteen", [9]="thirteen", [10]="seven", [11]="major seven",
+}
+
+-- Build a speller for a key context: { tonicPc = 0-11, useFlats = bool }.
+-- Returns a function pc -> spoken note name. Flats are the safer default for
+-- unknown keys (more readable: "E flat" vs "D sharp").
+function speech.makeSpeller(key)
+  local useFlats = true
+  if key and key.useFlats ~= nil then useFlats = key.useFlats end
+  local names = useFlats and FLAT_NAMES or SHARP_NAMES
+  return function(pc) return names[pc % 12] end
+end
+
+-- Render a chordlib result to a spoken string. Returns "" when nothing should
+-- be said (empty selection). `opts.speller` is required for spelling; if absent
+-- a flats speller is used.
+function speech.describe(result, opts)
+  opts = opts or {}
+  local spell = opts.speller or speech.makeSpeller(nil)
+  if not result then return "" end
+
+  local k = result.kind
+  if k == "empty" then
+    return ""
+
+  elseif k == "note" then
+    return speech.octaveName(result.pitch, spell, opts.octaveOffset)
+
+  elseif k == "interval" then
+    local name = speech.interval[result.semis] or (result.semis .. " semitones")
+    return name .. ", " .. spell(result.bassPc) .. " and " .. spell(result.otherPc)
+
+  elseif k == "chord" then
+    local parts = { spell(result.rootPc) .. " " .. (speech.quality[result.quality] or result.quality) }
+    if result.extras and #result.extras > 0 then
+      for _, iv in ipairs(result.extras) do
+        local deg = speech.tension[iv]
+        if deg then parts[#parts+1] = "add " .. deg end
+      end
+    end
+    local line = table.concat(parts, " ")
+    if result.inversion == "over" then
+      line = line .. " over " .. spell(result.bassPc)
+    elseif type(result.inversion) == "number" and result.inversion > 0 then
+      line = line .. ", " .. speech.inversion[result.inversion]
+    end
+    return line
+
+  elseif k == "unknown" then
+    -- read out the notes we couldn't name
+    local names = {}
+    local seen = {}
+    for _, p in ipairs(result.notes or {}) do
+      local pc = p % 12
+      if not seen[pc] then seen[pc] = true; names[#names+1] = spell(pc) end
+    end
+    return "unrecognised, " .. table.concat(names, " ")
+  end
+
+  return ""
+end
+
+-- Spoken note name with octave, e.g. "C 4". `offset` shifts the octave number to
+-- match REAPER's display; 0 gives middle C = C 4, as the rest of AccessiChords
+-- reports it.
+function speech.octaveName(pitch, speller, offset)
+  offset = offset or 0
+  local octave = math.floor(pitch / 12) - 1 + offset
+  return speller(pitch % 12) .. " " .. octave
+end
+
+-- ==========================================================================
+-- chord reporting for the MIDI editor (merged from chordreport.lua)
+-- ==========================================================================
+
+--[[
+  Reads the selected MIDI notes and speaks the chord.
+
+  OSARA's chord-navigation actions leave all of the chord's notes selected, so
+  after running one of them we read the selected notes from the active MIDI
+  editor take, identify them with the chordlib section above and speak the result
+  via the speech section above.
+
+  Enharmonic spelling (flats vs sharps) follows REAPER's native snap-to-key,
+  read from the take with reaper.MIDI_GetScale. When no scale is set we fall back
+  to flats.
+]]
+
+-- Major-key tonic pitch class -> spell with flats? (true = flats, false = sharps)
+local MAJOR_USES_FLATS = {
+  [0]=true,  [1]=true,  [2]=false, [3]=true,  [4]=false, [5]=true,
+  [6]=false, [7]=false, [8]=true,  [9]=false, [10]=true, [11]=false,
+}
+
+-- REAPER scale name (lower case) -> semitones from its tonic up to the tonic of
+-- its relative major, so we can look the accidental count up in MAJOR_USES_FLATS.
+local RELATIVE_MAJOR_OFFSET = {
+  major = 0, ionian = 0,
+  minor = 3, aeolian = 3,
+  dorian = 10, phrygian = 8, lydian = 7, mixolydian = 5, locrian = 1,
+}
+
+-- Decide flats vs sharps for a REAPER scale. Non-diatonic scales we don't have a
+-- key signature for default to flats (more readable for unknown context).
+local function useFlatsForScale(root, name)
+  local offset = RELATIVE_MAJOR_OFFSET[tostring(name):lower()]
+  if offset == nil then
+    return true
+  end
+  return MAJOR_USES_FLATS[(root + offset) % 12]
+end
+
+-- Read REAPER's native snap-to-key for the take and return a key context table
+-- { useFlats = bool } for the speller, or nil if no scale is set / unavailable.
+local function currentKey(take)
+  if take == nil or reaper.MIDI_GetScale == nil then
+    return nil
+  end
+  local enabled, root, _, name = reaper.MIDI_GetScale(take, 0, 0, "")
+  if not enabled then
+    return nil
+  end
+  return { useFlats = useFlatsForScale(root, name) }
+end
+
+-- Return a list of MIDI note numbers for the currently selected notes in the
+-- given take (duplicates kept, so voicing can detect doublings).
+local function selectedPitches(take)
+  local pitches = {}
+  local _, noteCount = reaper.MIDI_CountEvts(take)
+  local i
+  for i = 0, noteCount - 1 do
+    local ok, selected, _, _, _, _, pitch = reaper.MIDI_GetNote(take, i)
+    if ok and selected then
+      pitches[#pitches + 1] = pitch
+    end
+  end
+  return pitches
+end
+
+-- Identify and speak the currently selected notes, spelled per the native key.
+local function reportChord()
+
+  local activeMidiEditor = reaper.MIDIEditor_GetActive()
+
+  if activeMidiEditor == nil then
+    return
+  end
+
+  local take = reaper.MIDIEditor_GetTake(activeMidiEditor)
+
+  if take == nil then
+    return
+  end
+
+  local pitches = selectedPitches(take)
+
+  if #pitches == 0 then
+    speak("no notes")
+    return
+  end
+
+  local speller = speech.makeSpeller(currentKey(take))
+  local result = chordlib.analyze(pitches)
+
+  speak(speech.describe(result, {
+    speller = speller,
+    octaveOffset = 0,
+  }))
+end
+
+-- Move through the MIDI editor's chords using OSARA's own chord navigation, then
+-- describe the chord we land on in AccessiChords' own voice. commandName is the
+-- OSARA named command to run (e.g. "_OSARA_NEXTCHORD"); direction names it for the
+-- error message ("next" / "previous"). OSARA's own report is muted (best effort,
+-- so older OSARA versions still move) so that reportChord speaks instead.
+local function moveToChord(commandName, direction)
+
+  local activeMidiEditor = reaper.MIDIEditor_GetActive()
+
+  if activeMidiEditor == nil then
+    return
+  end
+
+  local muteCommand = reaper.NamedCommandLookup("_OSARA_ME_MUTENEXTMESSAGE")
+  local moveCommand = reaper.NamedCommandLookup(commandName)
+
+  if moveCommand == 0 then
+    reaper.MB('The OSARA action to move to the '..direction..' chord could not be found. Please make sure a recent version of OSARA is installed.', 'AccessiChords - Error', 0)
+    return
+  end
+
+  if muteCommand ~= 0 then
+    reaper.MIDIEditor_OnCommand(activeMidiEditor, muteCommand)
+  end
+
+  reaper.MIDIEditor_OnCommand(activeMidiEditor, moveCommand)
+
+  reportChord()
 end
 
 return {
@@ -1051,11 +1508,13 @@ return {
   insertMidiNotes = insertMidiNotes,
   insertMidiNotesByChordMode = insertMidiNotesByChordMode,
   map = map,
+  moveToChord = moveToChord,
   playNotes = playNotes,
   playNotesByChordMode = playNotesByChordMode,
   playNotesDeferred = playNotesDeferred,
   print = print,
   registerDeferredCommand = registerDeferredCommand,
+  reportChord = reportChord,
   serializeTable = serializeTable,
   setValue = setValue,
   setValuePersist = setValuePersist,

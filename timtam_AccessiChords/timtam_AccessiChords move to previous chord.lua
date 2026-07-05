@@ -6,28 +6,6 @@ package.path = path .. "?.lua"
 -- navigation. OSARA's report for the move is muted so that AccessiChords
 -- describes the chord itself instead, using its own chord identification.
 
-local chordreport = require('chordreport')
+local AccessiChords = require('timtam_AccessiChords')
 
-local activeMidiEditor = reaper.MIDIEditor_GetActive()
-
-if activeMidiEditor == nil then
-  return
-end
-
-local muteCommand = reaper.NamedCommandLookup("_OSARA_ME_MUTENEXTMESSAGE")
-local moveCommand = reaper.NamedCommandLookup("_OSARA_PREVCHORD")
-
-if moveCommand == 0 then
-  reaper.MB('The OSARA action to move to the previous chord could not be found. Please make sure a recent version of OSARA is installed.', 'AccessiChords - Error', 0)
-  return
-end
-
--- muting is best effort - if the OSARA action is missing (older OSARA) we still
--- move, OSARA just reports the chord in its own words
-if muteCommand ~= 0 then
-  reaper.MIDIEditor_OnCommand(activeMidiEditor, muteCommand)
-end
-
-reaper.MIDIEditor_OnCommand(activeMidiEditor, moveCommand)
-
-chordreport.report()
+AccessiChords.moveToChord("_OSARA_PREVCHORD", "previous")
